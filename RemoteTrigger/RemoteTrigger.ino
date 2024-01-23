@@ -5,8 +5,13 @@
 
 #define PRINT_BUFSIZE 128
 
+#if defined(ARDUINO_XIAO_ESP32S3)
 const int relayPin = D0;
 const int buttonPin = D1;
+#else
+const int relayPin = 1;
+const int buttonPin = 2;
+#endif
 bool has_serial = false;
 int buttonState = 0;
 
@@ -116,6 +121,63 @@ void startWebServer() {
   }
 }
 
+void ensure_wifi_connected() {
+  // reconnecting is weird. it takes 35 seconds or so
+  // see: https://github.com/espressif/arduino-esp32/issues/653#issuecomment-778561856
+  if (WiFi.status() != WL_CONNECTED) {
+    print("WiFi not connected. Connecting...\n");
+
+    int i=0;
+    while (WiFi.status() != WL_CONNECTED) {
+      i++;
+      delay(2000);
+      print(".");
+      if (i >= 10) {
+        i = 1;
+        print("\nConnection status: ");
+        switch (WiFi.status()) {
+          case WL_IDLE_STATUS:
+            print("idle");
+            break;
+
+          case WL_NO_SSID_AVAIL:
+            print("no ssid avail");
+            break;
+
+          case WL_SCAN_COMPLETED:
+            print("scan completed");
+            break;
+
+          case WL_CONNECTED:
+            print("connected");
+            break;
+
+          case WL_CONNECT_FAILED:
+            print("connect failed");
+            break;
+
+          case WL_CONNECTION_LOST:
+            print("connection lost");
+            break;
+
+          case WL_DISCONNECTED:
+            print("disconnected");
+            break;
+
+          default:
+            print("unknown");
+            break;
+        }
+        print("\n");
+        WiFi.reconnect();
+      }
+    }
+
+    IPAddress ip = WiFi.localIP();
+    print("\nWiFi connected (IP: %u.%u.%u.%u)\n", ip[0], ip[1], ip[2], ip[3]);
+  }
+}
+
 void setup() {
   pinMode(relayPin, OUTPUT);
   pinMode(buttonPin, INPUT_PULLUP);
@@ -137,16 +199,15 @@ void setup() {
   WiFi.setSleep(false);
 
   while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
+    delay(1000);
     print(".");
   }
-  print("\nWiFi connected\n");
-
+  // webserver wont start without initial wifi connection
+  ensure_wifi_connected();
   startWebServer();
-  IPAddress ip = WiFi.localIP();
-  print("Server Ready! Use 'http://%u.%u.%u.%u to connect\n", ip[0], ip[1], ip[2], ip[3]);
 }
 
 void loop() {
+  ensure_wifi_connected();
   delay(10000);
 }
